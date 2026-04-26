@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSRL Hash Extractor (Modern/iOS/Android/Legacy)</title>
+    <style>
+        :root {
+            --bg-color: #0f1115;
+            --panel-bg: #1a1d24;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #334155;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warn: #f59e0b;
+            --delta-accent: #818cf8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: var(--bg-color); color: var(--text-main);
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; padding: 1rem; }
+        .container { width: 100%; max-width: 1350px; background: var(--panel-bg);
+            border-radius: 12px; border: 1px solid var(--border); overflow: hidden;
+            display: flex; flex-direction: column; max-height: 96vh;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+        .header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+            background: linear-gradient(to right, #1a1d24, #1e293b); }
+        .header h1 { font-size: 1.35rem; margin-bottom: 0.25rem; }
+        .header p { color: var(--text-muted); font-size: 0.85rem; }
+
+        .toolbar { display: flex; gap: 0.75rem; align-items: center;
+            padding: 0.75rem 1.5rem; background: #15181e;
+            border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+        .toolbar label { font-size: 0.85rem; color: var(--text-muted); }
+        .toolbar select, .toolbar input[type="text"] {
+            background: #0f1115; color: var(--text-main);
+            border: 1px solid var(--border); border-radius: 6px;
+            padding: 0.4rem 0.6rem; font-size: 0.9rem; }
+        .toolbar input[type="text"] { min-width: 220px; }
+        .toolbar .chk { display: flex; align-items: center; gap: 0.4rem; cursor: pointer;
+            font-size: 0.85rem; }
+        .toolbar .chk input { width: 16px; height: 16px; accent-color: var(--primary); }
+        .toolbar .pill { font-size: 0.75rem; padding: 0.15rem 0.5rem;
+            border-radius: 999px; background: #0f1115; border: 1px solid var(--border);
+            color: var(--text-muted); }
+        .toolbar .pill.ok { border-color: var(--success); color: var(--success); }
+        .toolbar .pill.warn { border-color: var(--warn); color: var(--warn); }
+        .toolbar .pill.bad { border-color: var(--danger); color: var(--danger); }
+
+        .dataset-checks { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+        .dataset-check-item { display: flex; align-items: center; gap: 0.4rem;
+            padding: 0.25rem 0.6rem; background: #0f1115;
+            border: 1px solid var(--border); border-radius: 6px;
+            font-size: 0.85rem; transition: border-color 0.15s; }
+        .dataset-check-item.selected { border-color: var(--primary); }
+        .delta-toggle-btn { cursor: pointer; font-size: 0.8rem; font-weight: 700;
+            padding: 0.05rem 0.45rem; border-radius: 4px;
+            border: 1px solid var(--border); background: transparent;
+            color: var(--text-muted); transition: all 0.15s; line-height: 1.5; }
+        .delta-toggle-btn:not([disabled]).active { border-color: var(--delta-accent);
+            color: var(--delta-accent); background: rgba(129,140,248,0.12); }
+        .delta-toggle-btn[disabled] { opacity: 0.3; cursor: not-allowed; }
+
+        .content { display: flex; flex: 1; overflow: hidden; }
+
+        /* OS sidebar */
+        .sidebar { width: 310px; border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; background: #15181e; flex-shrink: 0; }
+
+        /* Delta OS sidebar — hidden until a dataset's Δ is active */
+        .delta-sidebar { width: 280px; border-right: 1px solid var(--border);
+            display: none; flex-direction: column; background: #12151c; flex-shrink: 0; }
+        .delta-sidebar.visible { display: flex; }
+        .delta-sidebar .sidebar-header { border-top: 2px solid var(--delta-accent); }
+        .sidebar-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.07em;
+            text-transform: uppercase; white-space: nowrap; }
+        .sidebar-label.delta { color: var(--delta-accent); }
+        .delta-sidebar .os-group-title { color: var(--delta-accent); opacity: 0.85; }
+        .delta-sidebar .group-toggle { color: var(--delta-accent); }
+        .delta-sidebar .checkbox-wrapper input[type="checkbox"]:checked {
+            background: var(--delta-accent); border-color: var(--delta-accent); }
+        .delta-sidebar .checkbox-wrapper:hover input[type="checkbox"]:not(:checked) {
+            border-color: var(--delta-accent); }
+
+        .sidebar-header { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+        .sidebar-header input {
+            flex: 1; background: #0f1115; color: var(--text-main);
+            border: 1px solid var(--border); border-radius: 6px;
+            padding: 0.35rem 0.6rem; font-size: 0.85rem; }
+
+        .os-list { flex: 1; overflow-y: auto; padding: 0.75rem 1rem; }
+        .os-group { margin-bottom: 1.2rem; }
+        .os-group-title { font-size: 0.8rem; text-transform: uppercase;
+            letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem;
+            padding-bottom: 0.25rem; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; }
+        .group-toggle { cursor: pointer; color: var(--primary); font-size: 0.7rem; }
+        .checkbox-wrapper { display: flex; align-items: center;
+            margin-bottom: 0.35rem; cursor: pointer; }
+        .checkbox-wrapper input[type="checkbox"] {
+            appearance: none; background: transparent;
+            width: 1em; height: 1em; border: 2px solid var(--text-muted);
+            border-radius: 3px; display: grid; place-content: center;
+            margin-right: 0.6rem; transition: all 0.15s; flex-shrink: 0; }
+        .checkbox-wrapper input[type="checkbox"]::before {
+            content: ""; width: 0.6em; height: 0.6em; transform: scale(0);
+            transition: 120ms transform; box-shadow: inset 1em 1em var(--bg-color);
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); }
+        .checkbox-wrapper input[type="checkbox"]:checked {
+            background: var(--primary); border-color: var(--primary); }
+        .checkbox-wrapper input[type="checkbox"]:checked::before { transform: scale(1); }
+        .checkbox-wrapper:hover input[type="checkbox"]:not(:checked) { border-color: var(--primary); }
+        .os-label { font-size: 0.85rem; word-break: break-word; }
+
+        .main-panel { flex: 1; padding: 1rem 1.25rem;
+            display: flex; flex-direction: column; background: var(--panel-bg); }
+        .status-card { background: #111318; border: 1px solid var(--border);
+            border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
+        .status-title { font-size: 1rem; margin-bottom: 0.5rem;
+            display: flex; align-items: center; gap: 0.5rem; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%;
+            background: var(--text-muted); }
+        .status-dot.active { background: var(--primary);
+            box-shadow: 0 0 10px var(--primary); animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(59,130,246,0); }
+            100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); } }
+
+        .terminal { flex: 1; background: #000; border-radius: 6px;
+            padding: 0.75rem; font-family: Consolas, 'Courier New', monospace;
+            font-size: 0.8rem; color: #10b981; overflow-y: auto;
+            white-space: pre-wrap; border: 1px solid #222; min-height: 300px; }
+
+        .controls { display: flex; gap: 0.75rem; padding: 0.75rem 1.5rem;
+            background: #15181e; border-top: 1px solid var(--border);
+            align-items: center; }
+        .btn { background: var(--primary); color: white; border: none;
+            padding: 0.6rem 1.2rem; border-radius: 6px; font-size: 0.9rem;
+            font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .btn:hover { background: var(--primary-hover); }
+        .btn-danger { background: var(--danger); }
+        .btn-danger:hover { background: #dc2626; }
+        .btn:disabled { background: var(--border); color: var(--text-muted);
+            cursor: not-allowed; }
+
+        .loader { border: 2px solid rgba(255,255,255,0.1); border-radius: 50%;
+            border-top: 2px solid var(--primary); width: 14px; height: 14px;
+            animation: spin 1s linear infinite; display: inline-block;
+            margin-right: 6px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>NSRL Hash Extractor</h1>
+        <p>Magnet Axiom icin optimize, dataset bazli filtreli DB uretici. Sistem kilitlenmeyecek sekilde throttled.</p>
+    </div>
+
+    <div class="toolbar">
+        <label>Dataset:</label>
+        <div id="dataset-checks" class="dataset-checks"></div>
+        <span style="border-left: 1px solid var(--border); height: 22px;"></span>
+        <label style="color: var(--text-muted);">Hash:</label>
+        <label class="chk"><input type="checkbox" class="hash-chk" value="sha256"> SHA-256</label>
+        <label class="chk"><input type="checkbox" class="hash-chk" value="sha1"> SHA-1</label>
+        <label class="chk"><input type="checkbox" class="hash-chk" value="md5" checked> MD5</label>
+        <label class="chk"><input type="checkbox" class="hash-chk" value="crc32"> CRC32</label>
+        <span style="border-left: 1px solid var(--border); height: 22px;"></span>
+        <label>PKG filtresi:</label>
+        <input type="text" id="pkg-filter" placeholder="ornek: %Chrome% (opsiyonel)">
+        <span style="border-left: 1px solid var(--border); height: 22px;"></span>
+        <label class="chk" title="Cikartma tamamlandiktan sonra duplicate hash satirlarini sil ve VACUUM uygula. Ekstra sure: 5-20 dk.">
+            <input type="checkbox" id="do-dedup"> Dedup uygula
+        </label>
+    </div>
+
+    <div class="content">
+        <!-- Base OS list -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <input type="text" id="os-search" placeholder="OS ara..." oninput="filterOsList()">
+                <span class="group-toggle" onclick="toggleAllGlobal()" id="global-toggle">Tumunu Sec</span>
+            </div>
+            <div class="os-list" id="os-list-container">
+                <div style="text-align:center; padding: 2rem;">
+                    <div class="loader"></div>
+                    <p style="margin-top:0.75rem; color:var(--text-muted)">Yukleniyor...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delta OS list — visible when at least one dataset has Δ active -->
+        <div class="delta-sidebar" id="delta-sidebar">
+            <div class="sidebar-header">
+                <span class="sidebar-label delta">Delta</span>
+                <input type="text" id="delta-search" placeholder="Delta OS ara..." oninput="filterDeltaList()">
+                <span class="group-toggle" onclick="toggleAllDelta()" id="delta-global-toggle">Tumunu Sec</span>
+            </div>
+            <div class="os-list" id="delta-list-container">
+                <p style="padding:1rem; color:var(--text-muted); font-size:0.8rem;">Delta secilince yuklenecek...</p>
+            </div>
+        </div>
+
+        <div class="main-panel">
+            <div class="status-card">
+                <div class="status-title">
+                    <div class="status-dot" id="status-indicator"></div>
+                    <span id="status-text">Hazir - Dataset + OS secin.</span>
+                </div>
+                <p style="color: var(--text-muted); font-size: 0.8rem; line-height: 1.5;">
+                    Birden fazla dataset secebilir, her birinde ayri delta etkinlestirebilirsiniz.
+                    Varsayilan hash turu MD5'tir. Delta etkinse base DB kopyalanmaz; delta INSERT'leri
+                    kucuk bir additions DB'ye alinir. FILE fazinda disk kullanimi %70-75 bandidir.
+                </p>
+            </div>
+            <div class="terminal" id="terminal-output">Konsol ciktisi burada...</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn btn-danger" id="shutdown-btn" onclick="shutdownServer()"
+                style="background:#7f1d1d;">Sunucuyu Kapat</button>
+        <button class="btn" id="append-btn" onclick="openAppendModal()"
+                style="background:#0f766e;">Yeni Delta Uygula</button>
+        <button class="btn" id="dedup-btn" onclick="openDedupModal()"
+                style="background:#6d28d9;">Hash Dedup</button>
+        <div style="flex:1"></div>
+        <button class="btn btn-danger" id="stop-btn" style="display:none;"
+                onclick="stopExtraction()">Durdur</button>
+        <button class="btn" id="start-btn" disabled onclick="startExtraction()">Baslat</button>
+    </div>
+</div>
+
+<div id="append-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center;">
+    <div style="background:var(--bg-2, #1a1a1a); color:var(--text, #eee); padding:1.5rem; border-radius:8px; max-width:700px; width:90%; max-height:85vh; overflow:auto; border:1px solid #333;">
+        <h3 style="margin-top:0;">Yeni Delta Uygula</h3>
+        <p style="color:var(--text-muted, #999); font-size:0.85rem; line-height:1.5;">
+            Mevcut filtrelenmis DB'ye sadece yeni delta'dan eslesen satirlari ekler (~2-5 dk).
+            Filtre kriterleri (OS listesi, hash turu, PKG filter) DB'nin icinden okunur.
+            Delta dosyasi <code>NSRL/&lt;dataset&gt;/</code> altinda olmali.
+        </p>
+        <label style="display:block; margin-top:1rem; font-weight:600;">Mevcut DB</label>
+        <select id="append-db-select" style="width:100%; padding:0.5rem; background:#111; color:#eee; border:1px solid #333; border-radius:4px;">
+            <option value="">Yukleniyor...</option>
+        </select>
+        <div id="append-db-info" style="margin-top:0.5rem; color:var(--text-muted, #999); font-size:0.8rem;"></div>
+
+        <div id="append-hash-info" style="display:none; margin-top:0.75rem; padding:0.6rem; background:#1a2a1a; border:1px solid #2d4a2d; border-radius:4px; font-size:0.85rem;">
+            <span style="color:#7dd87d;">Hash turu:</span>
+            <span id="append-hash-types" style="font-weight:600;">—</span>
+            <span style="color:var(--text-muted, #999); font-size:0.75rem; margin-left:0.5rem;">(DB ilk kurulusundan, degistirilemez)</span>
+        </div>
+
+        <label style="display:block; margin-top:1rem; font-weight:600;">Uygulanacak Delta Dosyasi</label>
+        <select id="append-delta-select" style="width:100%; padding:0.5rem; background:#111; color:#eee; border:1px solid #333; border-radius:4px;">
+            <option value="">Once DB secin...</option>
+        </select>
+        <div style="margin-top:0.3rem; color:var(--text-muted, #999); font-size:0.75rem;">
+            NSRL/&lt;dataset&gt;/ altindaki tum delta .sql dosyalari listelenir (en yeni ustte).
+        </div>
+
+        <div style="margin-top:1.5rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+            <button class="btn" onclick="closeAppendModal()" style="background:#444;">Iptal</button>
+            <button class="btn" id="append-submit-btn" onclick="submitAppendDelta()" style="background:#0f766e;">Uygula</button>
+        </div>
+    </div>
+</div>
+
+<div id="dedup-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center;">
+    <div style="background:var(--bg-2, #1a1a1a); color:var(--text, #eee); padding:1.5rem; border-radius:8px; max-width:600px; width:90%; border:1px solid #4c1d95;">
+        <h3 style="margin-top:0; color:#a78bfa;">Hash Deduplikasyon</h3>
+        <p style="color:var(--text-muted, #999); font-size:0.85rem; line-height:1.5;">
+            Secili DB'deki duplicate hash satirlarini siler. Her benzersiz hash kombinasyonu icin tek bir satir kalir.
+            Cok-dataset cikartmalarda (Modern+Legacy) ve tek dataset ici tekrarlarda onemli boyut azalmasi saglar.
+            Islem sonunda VACUUM uygulanir — <strong>5–20 dakika</strong> surebilir.
+        </p>
+
+        <label style="display:block; margin-top:1rem; font-weight:600;">Hedef DB</label>
+        <select id="dedup-db-select" style="width:100%; padding:0.5rem; background:#111; color:#eee; border:1px solid #4c1d95; border-radius:4px;">
+            <option value="">Yukleniyor...</option>
+        </select>
+        <div id="dedup-db-info" style="margin-top:0.4rem; color:var(--text-muted, #999); font-size:0.8rem;"></div>
+
+        <div style="margin-top:1.5rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+            <button class="btn" onclick="closeDedupModal()" style="background:#444;">Iptal</button>
+            <button class="btn" id="dedup-submit-btn" onclick="submitDedup()" style="background:#6d28d9;">Baslat</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let isRunning = false;
+    let datasets = [];
+    let currentDatasets = [];       // selected dataset IDs
+    let datasetDeltaState = {};     // { dsId: { active: bool } }
+    let lastOsGroups = null;        // cached last /api/os_list response
+
+    function humanSize(b) {
+        if (!b) return '-';
+        const u = ['B','KB','MB','GB','TB'];
+        let i = 0;
+        while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+        return b.toFixed(1) + ' ' + u[i];
+    }
+
+    function inferDatasetType(dsId) {
+        const n = (dsId || '').toLowerCase();
+        if (n.includes('ios') || n.includes('ipad') || n.includes('iphone')) return 'ios';
+        if (n.includes('android')) return 'android';
+        if (n.includes('legacy')) return 'legacy';
+        return 'modern';
+    }
+
+    function getDatasetLabel(dsId) {
+        const t = inferDatasetType(dsId);
+        return t.charAt(0).toUpperCase() + t.slice(1);  // 'Modern', 'Legacy', 'Android', 'Ios'
+    }
+
+    async function loadDatasets() {
+        const r = await fetch('/api/datasets');
+        datasets = await r.json();
+        const checksDiv = document.getElementById('dataset-checks');
+        checksDiv.innerHTML = '';
+
+        const available = datasets.filter(d => d.db_exists);
+        if (!available.length) {
+            checksDiv.innerHTML = '<span style="color:var(--text-muted); font-size:0.85rem;">(NSRL/ klasörü boş — içine DB klasörü atın)</span>';
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('os-list-container').innerHTML =
+                '<p style="padding:1.5rem; color:var(--text-muted); line-height:1.8;">' +
+                'NSRL/ klasörü boş veya henüz DB yok.<br>' +
+                'NSRL .db dosyası içeren herhangi bir klasörü <code>NSRL/</code> altına koyun,<br>' +
+                'ardından sayfayı yenileyin.</p>';
+            return;
+        }
+
+        datasets.forEach(d => {
+            const item = document.createElement('div');
+            item.className = 'dataset-check-item';
+            item.id = 'ds-item-' + d.id;
+            const deltaBtn = d.delta_exists
+                ? `<button class="delta-toggle-btn" id="delta-btn-${escHtml(d.id)}"
+                       data-dataset="${escHtml(d.id)}" disabled
+                       title="Delta dahil et (delta SQL varsa etkinlestir)"
+                       onclick="toggleDatasetDelta('${escHtml(d.id)}')">Δ</button>
+                   <span class="pill" style="font-size:0.7rem; color:var(--delta-accent); border-color:var(--delta-accent);">${humanSize(d.delta_size)}</span>`
+                : '';
+            item.innerHTML =
+                `<label class="chk" style="margin:0">` +
+                `<input type="checkbox" class="dataset-chk" value="${escHtml(d.id)}"` +
+                (d.db_exists ? '' : ' disabled') +
+                ` onchange="onDatasetChange()"> ${escHtml(d.label)}` +
+                `</label>` +
+                `<span class="pill ${d.db_exists ? 'ok' : 'bad'}" style="font-size:0.7rem;">${humanSize(d.db_size)}</span>` +
+                deltaBtn;
+            checksDiv.appendChild(item);
+        });
+
+        // Auto-check first available dataset
+        const firstChk = checksDiv.querySelector('.dataset-chk:not([disabled])');
+        if (firstChk) {
+            firstChk.checked = true;
+        }
+        onDatasetChange();
+    }
+
+    function toggleDatasetDelta(dsId) {
+        if (!currentDatasets.includes(dsId)) return;
+        if (!datasetDeltaState[dsId]) datasetDeltaState[dsId] = { active: false };
+        datasetDeltaState[dsId].active = !datasetDeltaState[dsId].active;
+        const btn = document.getElementById('delta-btn-' + dsId);
+        if (btn) btn.classList.toggle('active', datasetDeltaState[dsId].active);
+        // Re-render from cache — no server request needed
+        if (lastOsGroups) renderOsList(lastOsGroups);
+    }
+
+    async function onDatasetChange() {
+        currentDatasets = Array.from(
+            document.querySelectorAll('.dataset-chk:checked')
+        ).map(cb => cb.value);
+
+        // Update dataset item borders + delta button states
+        datasets.forEach(d => {
+            const item = document.getElementById('ds-item-' + d.id);
+            if (item) item.classList.toggle('selected', currentDatasets.includes(d.id));
+            const btn = document.getElementById('delta-btn-' + d.id);
+            if (!btn) return;
+            const isSelected = currentDatasets.includes(d.id);
+            btn.disabled = !isSelected;
+            if (!isSelected && datasetDeltaState[d.id]) {
+                datasetDeltaState[d.id].active = false;
+                btn.classList.remove('active');
+            }
+        });
+
+        lastOsGroups = null;
+        await loadOsList();
+    }
+
+    async function loadOsList() {
+        const baseContainer = document.getElementById('os-list-container');
+        if (!currentDatasets.length) {
+            baseContainer.innerHTML = '<p style="padding:1.25rem; color:var(--text-muted); font-size:0.85rem;">En az bir dataset seçin.</p>';
+            document.getElementById('delta-sidebar').classList.remove('visible');
+            document.getElementById('start-btn').disabled = true;
+            return;
+        }
+        baseContainer.innerHTML = '<div style="text-align:center; padding: 2rem;"><div class="loader"></div><p style="margin-top:0.75rem; color:var(--text-muted)">OS listesi yukleniyor...</p></div>';
+        try {
+            const params = currentDatasets.map(d => 'dataset=' + encodeURIComponent(d)).join('&');
+            const r = await fetch('/api/os_list?' + params);
+            const data = await r.json();
+            if (data.error) {
+                baseContainer.innerHTML = `<p style="color:red; padding:1rem;">Hata: ${data.error}</p>`;
+                return;
+            }
+            lastOsGroups = data;
+            renderOsList(data);
+            document.getElementById('start-btn').disabled = false;
+        } catch (e) {
+            baseContainer.innerHTML = `<p style="color:red; padding:1rem;">Baglanti hatasi: ${e}</p>`;
+        }
+    }
+
+    // Returns true if a delta group should be visible (its dataset has Δ active)
+    function isDeltaGroupActive(groupName) {
+        if (currentDatasets.length === 1) {
+            return currentDatasets.some(d => datasetDeltaState[d] && datasetDeltaState[d].active);
+        }
+        for (const dsId of currentDatasets) {
+            const prefix = getDatasetLabel(dsId) + ' — ';  // 'Modern — '
+            if (groupName.startsWith(prefix)) {
+                return !!(datasetDeltaState[dsId] && datasetDeltaState[dsId].active);
+            }
+        }
+        return false;
+    }
+
+    // Returns selected OS values (base + delta) for a specific dataset job
+    function getSelectedOsForDataset(dsId) {
+        const containers = ['#os-list-container', '#delta-list-container'];
+        const vals = [];
+        if (currentDatasets.length === 1) {
+            containers.forEach(sel => {
+                document.querySelectorAll(sel + ' input[type="checkbox"]:checked').forEach(cb => vals.push(cb.value));
+            });
+        } else {
+            const prefix = getDatasetLabel(dsId) + ' — ';
+            containers.forEach(sel => {
+                document.querySelectorAll(sel + ' .os-group').forEach(groupEl => {
+                    const groupName = groupEl.dataset.group || '';
+                    if (groupName.startsWith(prefix)) {
+                        groupEl.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => vals.push(cb.value));
+                    }
+                });
+            });
+        }
+        return vals;
+    }
+
+    function escHtml(s) {
+        return (s || '').replace(/[&<>"']/g, c =>
+            ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    // OS IDs preselected for modern dataset — axiom_nsrl_windows10_imaj.md guide
+    const MODERN_PRESELECT_IDS = new Set([
+        // Windows 10
+        772,789,790,1075,1076,983,1077,901,892,894,919,900,893,895,1148,
+        1138,3320,3317,3318,3319,1178,1318,1964,1404,1444,1461,1446,1445,
+        1466,1451,1468,1454,1453,1403,1452,1455,1460,
+        // Windows 11
+        1366,1416,1365,1465,1464,1467,1462,3020,2789,2888,2790,3321,3323,3350,3322,
+        // Windows Server 2016/2019/2022+
+        867,868,869,897,898,1072,1177,1073,1419,1450,1448,1417,1766,3383,3384,3251,
+        // Windows Server 2008 R2
+        577,1357,578,700,602,466,494,465,
+        // Windows 7
+        363,787,788,409,371,413,364,480,483,414,365,481,482,559,416,
+        564,552,553,366,660,661,415,488,423,
+        // Windows 8 / 8.1
+        610,906,904,905,903,618,619,616,617,666,1899,696,697,698,1667,1702,1701,902,683,684,
+        // Windows Embedded 7/8/8.1
+        1031,467,1053,896,879,880,1029,1028,1030,1931,
+        // Windows HPC Server 2008 R2
+        1141,1156
+    ]);
+
+    function renderGroupsToContainer(groupsObj, container, preselect = null) {
+        container.innerHTML = '';
+        const sortedKeys = Object.keys(groupsObj).sort();
+        let total = 0;
+        for (const g of sortedKeys) {
+            const list = groupsObj[g];
+            if (!list || !list.length) continue;
+            total += list.length;
+            const div = document.createElement('div');
+            div.className = 'os-group';
+            div.dataset.group = g;
+            const items = list.map(it => {
+                const label = escHtml(it.label || (it.name + ' ' + it.version));
+                const value = escHtml(it.value || (it.name + '|' + it.version));
+                const checked = (preselect && it.os_id && preselect.has(it.os_id)) ? ' checked' : '';
+                return `
+                    <label class="checkbox-wrapper" data-label="${label.toLowerCase()}">
+                        <input type="checkbox" value="${value}"${checked} onchange="updateStartButton()">
+                        <span class="os-label">${label}</span>
+                    </label>`;
+            }).join('');
+            div.innerHTML = `
+                <div class="os-group-title">
+                    <span>${escHtml(g)} (${list.length})</span>
+                    <span class="group-toggle" onclick="toggleGroup(this)">Tumunu Sec</span>
+                </div>
+                <div class="group-items">${items}</div>
+            `;
+            container.appendChild(div);
+        }
+        if (total === 0) {
+            container.innerHTML = '<p style="padding:1rem; color:var(--text-muted); font-size:0.8rem;">OS bulunamadi.</p>';
+        }
+    }
+
+    function renderOsList(groups) {
+        const baseGroups = {};
+        const deltaGroups = {};
+        for (const [g, items] of Object.entries(groups)) {
+            if (!items || !items.length) continue;
+            const baseItems = items.filter(it => !it.is_delta);
+            if (baseItems.length) baseGroups[g] = baseItems;
+            // Delta items: only include groups whose dataset has Δ active
+            const deltaItems = items.filter(it => it.is_delta);
+            if (deltaItems.length && isDeltaGroupActive(g)) deltaGroups[g] = deltaItems;
+        }
+        const hasModern = currentDatasets.some(d => inferDatasetType(d) === 'modern');
+        renderGroupsToContainer(baseGroups, document.getElementById('os-list-container'), hasModern ? MODERN_PRESELECT_IDS : null);
+        renderGroupsToContainer(deltaGroups, document.getElementById('delta-list-container'));
+
+        // Show delta sidebar only when there are visible delta groups
+        const showDelta = Object.keys(deltaGroups).length > 0;
+        document.getElementById('delta-sidebar').classList.toggle('visible', showDelta);
+        if (!showDelta) {
+            document.getElementById('delta-list-container').innerHTML =
+                '<p style="padding:1rem; color:var(--text-muted); font-size:0.8rem;">Delta secilince yuklenecek...</p>';
+        }
+        updateStartButton();
+    }
+
+    function filterOsList() {
+        const q = document.getElementById('os-search').value.toLowerCase().trim();
+        document.querySelectorAll('#os-list-container .checkbox-wrapper').forEach(el => {
+            const label = el.dataset.label || '';
+            el.style.display = (!q || label.includes(q)) ? '' : 'none';
+        });
+    }
+
+    function filterDeltaList() {
+        const q = document.getElementById('delta-search').value.toLowerCase().trim();
+        document.querySelectorAll('#delta-list-container .checkbox-wrapper').forEach(el => {
+            const label = el.dataset.label || '';
+            el.style.display = (!q || label.includes(q)) ? '' : 'none';
+        });
+    }
+
+    function toggleGroup(el) {
+        const items = el.parentElement.parentElement.querySelectorAll('input[type="checkbox"]');
+        const allChecked = Array.from(items).every(cb => cb.checked);
+        items.forEach(cb => cb.checked = !allChecked);
+        el.innerText = !allChecked ? 'Tumunu Kaldir' : 'Tumunu Sec';
+        updateStartButton();
+    }
+
+    function toggleAllGlobal() {
+        const items = document.querySelectorAll('#os-list-container input[type="checkbox"]');
+        const allChecked = Array.from(items).every(cb => cb.checked);
+        items.forEach(cb => cb.checked = !allChecked);
+        document.querySelectorAll('#os-list-container .os-group .group-toggle').forEach(e => {
+            e.innerText = !allChecked ? 'Tumunu Kaldir' : 'Tumunu Sec';
+        });
+        document.getElementById('global-toggle').innerText = !allChecked ? 'Tumunu Kaldir' : 'Tumunu Sec';
+        updateStartButton();
+    }
+
+    function toggleAllDelta() {
+        const items = document.querySelectorAll('#delta-list-container input[type="checkbox"]');
+        const allChecked = Array.from(items).every(cb => cb.checked);
+        items.forEach(cb => cb.checked = !allChecked);
+        document.querySelectorAll('#delta-list-container .os-group .group-toggle').forEach(e => {
+            e.innerText = !allChecked ? 'Tumunu Kaldir' : 'Tumunu Sec';
+        });
+        document.getElementById('delta-global-toggle').innerText = !allChecked ? 'Tumunu Kaldir' : 'Tumunu Sec';
+        updateStartButton();
+    }
+
+    function updateStartButton() {
+        if (isRunning) return;
+        const baseCount = document.querySelectorAll('#os-list-container input[type="checkbox"]:checked').length;
+        const deltaCount = document.querySelectorAll('#delta-list-container input[type="checkbox"]:checked').length;
+        const n = baseCount + deltaCount;
+        const dsCount = currentDatasets.length;
+        const btn = document.getElementById('start-btn');
+        if (n > 0 && dsCount > 0) {
+            btn.disabled = false;
+            const parts = [];
+            if (baseCount > 0) parts.push(`${baseCount} base`);
+            if (deltaCount > 0) parts.push(`${deltaCount} delta`);
+            const detail = parts.length > 1 ? ` (${parts.join(' + ')})` : '';
+            const dsLabel = dsCount > 1 ? `, ${dsCount} dataset` : '';
+            btn.innerText = `${n} OS icin Baslat${detail}${dsLabel}`;
+        } else {
+            btn.disabled = true;
+            btn.innerText = 'Baslat';
+        }
+    }
+
+    function appendToTerminal(text) {
+        const term = document.getElementById('terminal-output');
+        const clean = text.replace(/\r/g, '');
+        if (text.includes('\r')) {
+            const lines = term.innerText.split('\n');
+            if (lines.length) lines[lines.length - 1] = clean;
+            term.innerText = lines.join('\n');
+        } else {
+            if (term.innerText.trim().startsWith('Konsol')) term.innerText = clean;
+            else term.innerText += '\n' + clean;
+        }
+        term.scrollTop = term.scrollHeight;
+    }
+
+    function startExtraction() {
+        const hashTypes = Array.from(document.querySelectorAll('.hash-chk:checked')).map(c => c.value);
+        if (!hashTypes.length) {
+            alert('En az bir hash turu secili olmali.');
+            return;
+        }
+        if (!currentDatasets.length) {
+            alert('En az bir dataset secili olmali.');
+            return;
+        }
+
+        // Build per-dataset jobs; skip datasets with no selected OSes
+        const jobs = [];
+        for (const dsId of currentDatasets) {
+            const selOs = getSelectedOsForDataset(dsId);
+            if (!selOs.length) continue;
+            const deltaActive = !!(datasetDeltaState[dsId] && datasetDeltaState[dsId].active);
+            jobs.push({
+                dataset: dsId,
+                selected_os: selOs,
+                apply_delta: deltaActive,
+                delta_path: '',  // auto-discover from dataset folder
+            });
+        }
+
+        if (!jobs.length) {
+            alert('Hicbir OS secilmedi.');
+            return;
+        }
+
+        // Build terminal header
+        const dsLabels = jobs.map(j => {
+            const deltaActive = j.apply_delta;
+            return getDatasetLabel(j.dataset) + (deltaActive ? '+Δ' : '');
+        }).join(' + ');
+        const totalOs = jobs.reduce((s, j) => s + j.selected_os.length, 0);
+        const uniqueOs = new Set(jobs.flatMap(j => j.selected_os.map(v => v.split('|')[0].trim()))).size;
+        const osNote = totalOs !== uniqueOs ? ` (${uniqueOs} unique OS adi)` : '';
+
+        isRunning = true;
+        document.getElementById('start-btn').disabled = true;
+        document.getElementById('start-btn').innerHTML = '<div class="loader"></div> Calisiyor...';
+        document.querySelectorAll('#os-list-container input[type="checkbox"], #delta-list-container input[type="checkbox"]').forEach(cb => cb.disabled = true);
+        document.getElementById('status-indicator').classList.add('active');
+        document.getElementById('status-text').innerText = 'Islem calisiyor...';
+        document.getElementById('terminal-output').innerText =
+            `Dataset: ${dsLabels}\nOS sayisi: ${totalOs}${osNote}\nJob sayisi: ${jobs.length}\n...`;
+        document.getElementById('stop-btn').style.display = 'inline-block';
+
+        const payload = {
+            jobs: jobs,
+            pkg_filter: document.getElementById('pkg-filter').value.trim(),
+            hash_types: hashTypes,
+            do_dedup: document.getElementById('do-dedup').checked,
+        };
+
+        fetch('/api/start', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        }).then(r => r.json()).then(d => {
+            if (d.status === 'started') {
+                appendToTerminal('Cikti dosyasi: ' + (d.output || '-'));
+                connectToLogStream();
+            } else {
+                appendToTerminal('Hata: ' + (d.error || JSON.stringify(d)));
+                resetUI();
+            }
+        }).catch(e => { appendToTerminal('Hata: ' + e); resetUI(); });
+    }
+
+    function connectToLogStream() {
+        let buf = "";
+        fetch('/api/progress').then(async resp => {
+            const reader = resp.body.getReader();
+            const dec = new TextDecoder('utf-8');
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buf += dec.decode(value, {stream: true});
+                let parts = buf.split('\n\n');
+                buf = parts.pop();
+                for (const p of parts) {
+                    if (!p.startsWith('data: ')) continue;
+                    const s = p.substring(6);
+                    if (s === 'finished') { resetUI(); return; }
+                    try { appendToTerminal(JSON.parse(s).log); } catch(e) {}
+                }
+            }
+        }).catch(() => { appendToTerminal('Baglanti koptu.'); resetUI(); });
+    }
+
+    function stopExtraction() {
+        if (!isRunning) return;
+        document.getElementById('stop-btn').disabled = true;
+        document.getElementById('stop-btn').innerText = 'Durduruluyor...';
+        fetch('/api/stop', {method: 'POST'}).then(r => r.json())
+            .then(() => appendToTerminal('\n[SISTEM] Durduruldu.'))
+            .catch(e => appendToTerminal('\n[SISTEM] Durdurma hatasi: ' + e));
+    }
+
+    function openAppendModal() {
+        const modal = document.getElementById('append-modal');
+        modal.style.display = 'flex';
+        const sel = document.getElementById('append-db-select');
+        sel.innerHTML = '<option value="">Yukleniyor...</option>';
+        document.getElementById('append-db-info').innerText = '';
+        fetch('/api/existing_dbs').then(r => r.json()).then(dbs => {
+            if (!Array.isArray(dbs) || dbs.length === 0) {
+                sel.innerHTML = '<option value="">(mevcut DB yok — once bir filter run yapin)</option>';
+                return;
+            }
+            sel.innerHTML = '<option value="">Secin...</option>';
+            dbs.forEach(d => {
+                const o = document.createElement('option');
+                o.value = d.path;
+                o.dataset.dataset = d.dataset;
+                o.dataset.hashTypes = d.hash_types || '';
+                o.dataset.info = `${d.dataset} | ${humanSize(d.size)} | OS=${d.os_count}, PKG=${d.pkg_count}, FILE=${d.file_count.toLocaleString()}`;
+                o.textContent = d.name + '  (' + humanSize(d.size) + ')';
+                sel.appendChild(o);
+            });
+            sel.onchange = () => {
+                const opt = sel.options[sel.selectedIndex];
+                document.getElementById('append-db-info').innerText = opt.dataset.info || '';
+                const hashBox = document.getElementById('append-hash-info');
+                const ht = opt.dataset.hashTypes || '';
+                if (ht) {
+                    document.getElementById('append-hash-types').innerText = ht.toUpperCase().replace(/,/g, ' + ');
+                    hashBox.style.display = 'block';
+                } else {
+                    hashBox.style.display = 'none';
+                }
+                loadDeltaFilesForAppend(opt.dataset.dataset || '');
+            };
+        }).catch(e => {
+            sel.innerHTML = '<option value="">Hata: ' + e + '</option>';
+        });
+    }
+
+    function loadDeltaFilesForAppend(dataset) {
+        const ds = document.getElementById('append-delta-select');
+        ds.innerHTML = '<option value="">Yukleniyor...</option>';
+        if (!dataset) { ds.innerHTML = '<option value="">Once DB secin...</option>'; return; }
+        fetch('/api/delta_files?dataset=' + encodeURIComponent(dataset)).then(r => r.json()).then(list => {
+            if (!Array.isArray(list) || list.length === 0) {
+                ds.innerHTML = `<option value="">(NSRL/${dataset}/ altinda delta .sql yok)</option>`;
+                return;
+            }
+            ds.innerHTML = '';
+            list.forEach((d, i) => {
+                const o = document.createElement('option');
+                o.value = d.path;
+                const dt = new Date(d.mtime * 1000).toISOString().slice(0, 10);
+                o.textContent = (i === 0 ? 'EN YENI  ' : '         ') + d.name + '  (' + humanSize(d.size) + ', ' + dt + ')';
+                ds.appendChild(o);
+            });
+        }).catch(e => { ds.innerHTML = '<option value="">Hata: ' + e + '</option>'; });
+    }
+
+    function closeAppendModal() {
+        document.getElementById('append-modal').style.display = 'none';
+        document.getElementById('append-hash-info').style.display = 'none';
+        document.getElementById('append-db-info').innerText = '';
+    }
+
+    function submitAppendDelta() {
+        const sel = document.getElementById('append-db-select');
+        const path = sel.value;
+        if (!path) { alert('Bir DB secin.'); return; }
+        const dataset = sel.options[sel.selectedIndex].dataset.dataset || '';
+        if (!dataset) { alert('Secilen DB dataset bilgisi eksik (_filter_meta).'); return; }
+        const deltaPath = document.getElementById('append-delta-select').value;
+        if (!deltaPath) { alert('Uygulanacak delta dosyasini secin.'); return; }
+
+        closeAppendModal();
+        isRunning = true;
+        document.getElementById('start-btn').disabled = true;
+        document.getElementById('append-btn').disabled = true;
+        document.getElementById('status-indicator').classList.add('active');
+        document.getElementById('status-text').innerText = 'Append delta calisiyor...';
+        document.getElementById('terminal-output').innerText = `Append Delta\nDB: ${path}\nDataset: ${dataset}\nDelta: ${deltaPath}\n...`;
+        document.getElementById('stop-btn').style.display = 'inline-block';
+
+        fetch('/api/append_delta', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({existing_db: path, dataset: dataset, delta_path: deltaPath})
+        }).then(r => r.json()).then(d => {
+            if (d.status === 'started') {
+                appendToTerminal('Hedef DB: ' + d.output);
+                connectToLogStream();
+            } else {
+                appendToTerminal('Hata: ' + JSON.stringify(d));
+                resetUI();
+            }
+        }).catch(e => { appendToTerminal('Hata: ' + e); resetUI(); });
+    }
+
+    function openDedupModal() {
+        const modal = document.getElementById('dedup-modal');
+        modal.style.display = 'flex';
+        const sel = document.getElementById('dedup-db-select');
+        sel.innerHTML = '<option value="">Yukleniyor...</option>';
+        document.getElementById('dedup-db-info').innerText = '';
+        fetch('/api/existing_dbs').then(r => r.json()).then(dbs => {
+            if (!Array.isArray(dbs) || dbs.length === 0) {
+                sel.innerHTML = '<option value="">(output/ altinda DB yok)</option>';
+                return;
+            }
+            sel.innerHTML = '<option value="">Secin...</option>';
+            dbs.forEach(d => {
+                const o = document.createElement('option');
+                o.value = d.path;
+                o.dataset.info = `${d.dataset || '-'} | ${humanSize(d.size)} | OS=${d.os_count}, FILE=${d.file_count.toLocaleString()}`;
+                o.textContent = d.name + '  (' + humanSize(d.size) + ')';
+                sel.appendChild(o);
+            });
+            sel.onchange = () => {
+                const opt = sel.options[sel.selectedIndex];
+                document.getElementById('dedup-db-info').innerText = opt.dataset.info || '';
+            };
+        }).catch(e => { sel.innerHTML = '<option value="">Hata: ' + e + '</option>'; });
+    }
+
+    function closeDedupModal() {
+        document.getElementById('dedup-modal').style.display = 'none';
+        document.getElementById('dedup-db-info').innerText = '';
+    }
+
+    function submitDedup() {
+        const sel = document.getElementById('dedup-db-select');
+        const dbPath = sel.value;
+        if (!dbPath) { alert('Bir DB secin.'); return; }
+
+        closeDedupModal();
+        isRunning = true;
+        document.getElementById('start-btn').disabled = true;
+        document.getElementById('append-btn').disabled = true;
+        document.getElementById('dedup-btn').disabled = true;
+        document.getElementById('status-indicator').classList.add('active');
+        document.getElementById('status-text').innerText = 'Dedup calisiyor...';
+        document.getElementById('terminal-output').innerText = `Hash Dedup\nDB: ${dbPath}\n...`;
+        document.getElementById('stop-btn').style.display = 'inline-block';
+
+        fetch('/api/dedup_db', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({db_path: dbPath})
+        }).then(r => r.json()).then(d => {
+            if (d.status === 'started') {
+                connectToLogStream();
+            } else {
+                appendToTerminal('Hata: ' + (d.error || JSON.stringify(d)));
+                resetUI();
+            }
+        }).catch(e => { appendToTerminal('Hata: ' + e); resetUI(); });
+    }
+
+    function shutdownServer() {
+        if (!confirm("Sunucuyu kapat?")) return;
+        document.getElementById('shutdown-btn').innerText = 'Kapatiliyor...';
+        fetch('/api/shutdown', {method:'POST'}).finally(() => {
+            document.body.innerHTML = '<div style="text-align:center;padding:50px;"><h2>Sunucu kapandi</h2></div>';
+        });
+    }
+
+    function resetUI() {
+        isRunning = false;
+        document.getElementById('status-indicator').classList.remove('active');
+        document.getElementById('status-text').innerText = 'Tamamlandi.';
+        document.getElementById('start-btn').innerHTML = 'Yeni Islem';
+        document.getElementById('stop-btn').style.display = 'none';
+        document.getElementById('stop-btn').disabled = false;
+        document.getElementById('stop-btn').innerText = 'Durdur';
+        document.getElementById('append-btn').disabled = false;
+        document.getElementById('dedup-btn').disabled = false;
+        document.querySelectorAll('#os-list-container input[type="checkbox"], #delta-list-container input[type="checkbox"]').forEach(cb => cb.disabled = false);
+        updateStartButton();
+    }
+
+    loadDatasets();
+</script>
+</body>
+</html>

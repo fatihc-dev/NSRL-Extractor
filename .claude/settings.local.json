@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast; ast.parse\\(open\\('nsrl_extractor.py', encoding='utf-8'\\).read\\(\\)\\); print\\('nsrl_extractor.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('gui_app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('gui_app.py OK'\\)\")",
+      "Bash('C:\\\\Users\\\\Administrator\\\\Desktop\\\\NSRLHashList\\\\python_embed\\\\python.exe' -c \"import ast; ast.parse\\(open\\(r'C:\\\\Users\\\\Administrator\\\\Desktop\\\\NSRLHashList\\\\nsrl_extractor.py', encoding='utf-8'\\).read\\(\\)\\); print\\('nsrl_extractor.py OK'\\)\")",
+      "Bash('C:\\\\Users\\\\Administrator\\\\Desktop\\\\NSRLHashList\\\\python_embed\\\\python.exe' -c \"import ast; ast.parse\\(open\\(r'C:\\\\Users\\\\Administrator\\\\Desktop\\\\NSRLHashList\\\\gui_app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('gui_app.py OK'\\)\")",
+      "Bash('C:\\\\Users\\\\Administrator\\\\Desktop\\\\NSRLHashList\\\\python_embed\\\\python.exe' -c \"import ast; ast.parse\\(open\\(r'C:\\\\Users\\\\Administrator\\\\Desktop\\\\NSRLHashList\\\\nsrl_windows_extractor.py', encoding='utf-8'\\).read\\(\\)\\); print\\('nsrl_windows_extractor.py OK'\\)\")",
+      "Bash('python_embed\\\\python.exe' -c ' *)",
+      "WebSearch",
+      "WebFetch(domain:docs.magnetforensics.com)",
+      "WebFetch(domain:www.magnetforensics.com)",
+      "WebFetch(domain:askclees.com)",
+      "Bash(./python_embed/python.exe *)",
+      "PowerShell(Get-Content *)",
+      "WebFetch(domain:www.nist.gov)",
+      "WebFetch(domain:s3.amazonaws.com)",
+      "WebFetch(domain:www.hexacorn.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:bakerstreetforensics.com)",
+      "PowerShell(& \"C:\\\\Users\\\\Administrator\\\\Desktop\\\\NSRLExtractor\\\\python_embed\\\\python.exe\" -c \"import py_compile; py_compile.compile\\('C:/Users/Administrator/Desktop/NSRLExtractor/gui_app.py', doraise=True\\); print\\('OK'\\)\")",
+      "Bash(tasklist)",
+      "Bash(wmic process *)",
+      "Bash(powershell *)",
+      "PowerShell(Get-WmiObject *)",
+      "Bash(python_embed/python.exe -c ' *)"
+    ]
+  }
+}

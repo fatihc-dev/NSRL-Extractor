@@ -1,0 +1,27 @@
+# ── Portable Python runtime (setup.bat ile indirilir) ─────────────────────────
+python_embed/
+
+# ── NSRL veritabanları (NIST'ten ayrıca indirilir, yüzlerce GB) ───────────────
+NSRL/
+
+# ── Üretilen çıktılar ──────────────────────────────────────────────────────────
+output/
+
+# ── Extraction sırasında oluşturulan geçici dosyalar ──────────────────────────
+_additions_*.db
+_additions_*.db-wal
+_additions_*.db-shm
+_current_job.json
+temp_os_filter_*.txt
+
+# ── SQLite WAL / journal artıkları ────────────────────────────────────────────
+*.db-wal
+*.db-shm
+
+# ── Python cache ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+
+# ── Claude auto-memory (bu araç için, paylaşılmaz) ───────────────────────────
+memory/

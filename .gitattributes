@@ -1,0 +1,14 @@
+# Python, HTML, JSON, Markdown → LF (cross-platform standard)
+*.py    text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.txt   text eol=lf
+*.sql   text eol=lf
+
+# Windows batch files → CRLF (Windows requires this)
+*.bat   text eol=crlf
+
+# Git config
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
