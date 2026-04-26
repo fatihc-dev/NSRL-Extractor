@@ -3,6 +3,8 @@
 > Generate Magnet Axiom-compatible filtered hash databases from NIST NSRL RDSv3 Minimal datasets.  
 > NIST NSRL RDSv3 Minimal veritabanlarından Magnet Axiom uyumlu filtrelenmiş hash veritabanları üretin.
 
+![NSRL Hash Extractor Web GUI](WebGui.png)
+
 ---
 
 ## English
