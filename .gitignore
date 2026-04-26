@@ -23,5 +23,7 @@ __pycache__/
 *.py[cod]
 *.pyo
 
-# ── Claude auto-memory (bu araç için, paylaşılmaz) ───────────────────────────
+# ── Claude Code dosyaları (paylaşılmaz) ──────────────────────────────────────
 memory/
+.claude/
+.claudeignore
