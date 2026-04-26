@@ -515,43 +515,94 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Connection', 'keep-alive')
             self.end_headers()
 
-            global current_process
-            if current_process is None:
-                self.wfile.write(b"data: finished\n\n")
-                return
+            def _send(typ, text):
+                prefix = "\r" if typ == '\r' else ""
+                data = json.dumps({"log": prefix + text})
+                self.wfile.write(f"data: {data}\n\n".encode('utf-8'))
+                self.wfile.flush()
 
             try:
-                buffer = b""
-                while current_process and current_process.poll() is None:
-                    char = current_process.stdout.read(1)
-                    if not char:
-                        break
-                    if char == b'\r' or char == b'\n':
-                        if buffer:
-                            s = buffer.decode('utf-8', errors='replace').strip()
-                            if s:
-                                prefix = "\r" if char == b'\r' else ""
-                                data = json.dumps({"log": prefix + s})
-                                self.wfile.write(f"data: {data}\n\n".encode('utf-8'))
-                                self.wfile.flush()
-                        buffer = b""
-                    else:
-                        buffer += char
-                if current_process:
-                    rc = current_process.wait()
-                    if rc == 0:
-                        msg = 'ISLEM TAMAMLANDI!'
-                    elif rc == 130:
-                        msg = 'ISLEM IPTAL EDILDI. Olusan DB tamamlanmamis kabul edilir.'
-                    else:
-                        msg = f'ISLEM HATA ILE BITTI (kod {rc}). Logdaki [HATA] satirini kontrol edin.'
-                    self.wfile.write(f"data: {json.dumps({'log': msg})}\n\n".encode('utf-8'))
+                # Gecmis satirlari replay et (sekme kapatilip acilininca)
+                with log_buffer_lock:
+                    snapshot = list(log_buffer)
+                for typ, text in snapshot:
+                    if text == '__FINISHED__':
+                        continue
+                    _send(typ, text)
+
+                # Islem bitti mi kontrol et
+                if current_process is None or current_process.poll() is not None:
+                    self.wfile.write(b"data: finished\n\n")
                     self.wfile.flush()
-                self.wfile.write(b"data: finished\n\n")
-                self.wfile.flush()
+                    return
+
+                # Islem devam ediyor: yeni satirlari poll et
+                idx = len(snapshot)
+                while True:
+                    with log_buffer_lock:
+                        new_lines = log_buffer[idx:]
+                        idx = len(log_buffer)
+                    for typ, text in new_lines:
+                        if text == '__FINISHED__':
+                            self.wfile.write(b"data: finished\n\n")
+                            self.wfile.flush()
+                            return
+                        _send(typ, text)
+                    if current_process is None or current_process.poll() is not None:
+                        # Reader thread henuz __FINISHED__ yazmadiysa bekle
+                        import time as _t
+                        _t.sleep(0.2)
+                        with log_buffer_lock:
+                            remaining = log_buffer[idx:]
+                        for typ, text in remaining:
+                            if text == '__FINISHED__':
+                                self.wfile.write(b"data: finished\n\n")
+                                self.wfile.flush()
+                                return
+                            _send(typ, text)
+                        self.wfile.write(b"data: finished\n\n")
+                        self.wfile.flush()
+                        return
+                    import time as _t
+                    _t.sleep(0.05)
             except Exception:
                 pass
             return
+
+        if path == '/api/status':
+            running = current_process is not None and current_process.poll() is None
+            return self._json({
+                "running": running,
+                "output_db": current_output_db or "",
+            })
+
+        if path == '/api/output_dbs':
+            # Dedup modali icin: output/ altindaki tum gecerli .db'leri listele
+            out_dir = os.path.join(BASE_DIR, "output")
+            result = []
+            if os.path.isdir(out_dir):
+                for fn in sorted(os.listdir(out_dir)):
+                    if not fn.lower().endswith(".db") or fn.startswith("_"):
+                        continue
+                    fp = os.path.join(out_dir, fn)
+                    try:
+                        size = os.path.getsize(fp)
+                        if size < 1024 * 100:   # 100 KB altindaki dosyalar bos kabul edilir
+                            continue
+                        conn = sqlite3.connect(f"file:{fp}?mode=ro", uri=True, timeout=1.0)
+                        row = conn.execute("SELECT 1 FROM FILE LIMIT 1").fetchone()
+                        conn.close()
+                        if row:
+                            result.append({
+                                "path": fp,
+                                "name": fn,
+                                "size": size,
+                                "file_count": -1,   # gosterim icin kullanilmiyor
+                            })
+                    except Exception:
+                        continue
+                result.sort(key=lambda x: os.path.getmtime(x["path"]), reverse=True)
+            return self._json(result)
 
         super().do_GET()
 
@@ -652,11 +703,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             extractor  = os.path.join(BASE_DIR, "nsrl_extractor.py")
             cmd = [python_exe, extractor, "--job-file", job_file]
 
+            _clear_log_buffer()
+            current_output_db = output_db
             current_process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 bufsize=0, universal_newlines=False,
                 env={**os.environ, 'PYTHONUNBUFFERED': '1'},
             )
+            _start_stdout_reader(current_process)
             return self._json({"status": "started", "output": output_db})
 
         if self.path == '/api/append_delta':
@@ -685,11 +739,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                    "--existing", existing_db,
                    "--delta", delta_sql]
 
+            _clear_log_buffer()
+            current_output_db = existing_db
             current_process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 bufsize=0, universal_newlines=False,
                 env={**os.environ, 'PYTHONUNBUFFERED': '1'},
             )
+            _start_stdout_reader(current_process)
             return self._json({"status": "started", "output": existing_db})
 
         if self.path == '/api/dedup_db':
@@ -706,11 +763,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             extractor  = os.path.join(BASE_DIR, "nsrl_extractor.py")
             cmd = [python_exe, extractor, "--dedup-db", db_path]
 
+            _clear_log_buffer()
+            current_output_db = db_path
             current_process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 bufsize=0, universal_newlines=False,
                 env={**os.environ, 'PYTHONUNBUFFERED': '1'},
             )
+            _start_stdout_reader(current_process)
             return self._json({"status": "started", "output": db_path})
 
         if self.path == '/api/stop':
@@ -760,7 +820,56 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self._json({"error": "not found"}, 404)
 
 
-current_process = None
+current_process  = None
+current_output_db = None   # en son baslayan isin cikti DB yolu
+
+# --- Log buffer: stdout satirlarini saklar, sekme kapanip acilininca replay eder ---
+log_buffer      = []       # [(type, text)]  type='\n' | '\r'
+log_buffer_lock = threading.Lock()
+LOG_BUFFER_MAX  = 1000
+
+
+def _clear_log_buffer():
+    with log_buffer_lock:
+        log_buffer.clear()
+
+
+def _append_log(typ, text):
+    with log_buffer_lock:
+        log_buffer.append((typ, text))
+        if len(log_buffer) > LOG_BUFFER_MAX:
+            log_buffer.pop(0)
+
+
+def _start_stdout_reader(proc):
+    """Process stdout'unu arka planda okuyup log_buffer'a ekler."""
+    def _reader():
+        buf = b""
+        while proc.poll() is None:
+            ch = proc.stdout.read(1)
+            if not ch:
+                break
+            if ch in (b'\r', b'\n'):
+                if buf:
+                    s = buf.decode('utf-8', errors='replace').strip()
+                    if s:
+                        _append_log('\r' if ch == b'\r' else '\n', s)
+                buf = b""
+            else:
+                buf += ch
+        if buf:
+            s = buf.decode('utf-8', errors='replace').strip()
+            if s:
+                _append_log('\n', s)
+        rc = proc.wait()
+        if rc == 0:
+            _append_log('\n', 'ISLEM TAMAMLANDI!')
+        elif rc == 130:
+            _append_log('\n', 'ISLEM IPTAL EDILDI.')
+        else:
+            _append_log('\n', f'ISLEM HATA ILE BITTI (kod {rc}). Logdaki [HATA] satirini kontrol edin.')
+        _append_log('\n', '__FINISHED__')
+    threading.Thread(target=_reader, daemon=True).start()
 
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):

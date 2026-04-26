@@ -840,7 +840,7 @@
         const sel = document.getElementById('dedup-db-select');
         sel.innerHTML = '<option value="">Yukleniyor...</option>';
         document.getElementById('dedup-db-info').innerText = '';
-        fetch('/api/existing_dbs').then(r => r.json()).then(dbs => {
+        fetch('/api/output_dbs').then(r => r.json()).then(dbs => {
             if (!Array.isArray(dbs) || dbs.length === 0) {
                 sel.innerHTML = '<option value="">(output/ altinda DB yok)</option>';
                 return;
@@ -849,7 +849,7 @@
             dbs.forEach(d => {
                 const o = document.createElement('option');
                 o.value = d.path;
-                o.dataset.info = `${d.dataset || '-'} | ${humanSize(d.size)} | OS=${d.os_count}, FILE=${d.file_count.toLocaleString()}`;
+                o.dataset.info = `${humanSize(d.size)}`;
                 o.textContent = d.name + '  (' + humanSize(d.size) + ')';
                 sel.appendChild(o);
             });
@@ -916,7 +916,27 @@
         updateStartButton();
     }
 
+    async function checkRunningStatus() {
+        try {
+            const r = await fetch('/api/status');
+            const s = await r.json();
+            if (s.running) {
+                isRunning = true;
+                document.getElementById('start-btn').disabled = true;
+                document.getElementById('start-btn').innerHTML = '<div class="loader"></div> Calisiyor...';
+                document.getElementById('stop-btn').style.display = 'inline-block';
+                document.getElementById('append-btn').disabled = true;
+                document.getElementById('dedup-btn').disabled = true;
+                document.getElementById('status-indicator').classList.add('active');
+                document.getElementById('status-text').innerText = 'Islem calisiyor...';
+                document.getElementById('terminal-output').innerText = '(Devam eden islem bulundu — log geri yukleniyor...)\n';
+                connectToLogStream();
+            }
+        } catch(e) {}
+    }
+
     loadDatasets();
+    checkRunningStatus();
 </script>
 </body>
 </html>

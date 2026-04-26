@@ -733,12 +733,36 @@ def dedup_file_table(db_path):
 
     t0 = time.time()
 
+    def _heartbeat(label, stop_evt, t_ref):
+        """SQL calisirken \r ile guncellenen gecen sure satirini basar."""
+        while not stop_evt.wait(1.0):
+            el = time.time() - t_ref
+            sys.stdout.write(f"\r  {label}  Gecen: {format_time(el)}   ")
+            sys.stdout.flush()
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+
+    def _run_with_heartbeat(label, fn):
+        t_ref = time.time()
+        stop_evt = threading.Event()
+        hb = threading.Thread(target=_heartbeat, args=(label, stop_evt, t_ref), daemon=True)
+        hb.start()
+        result = fn()
+        stop_evt.set()
+        hb.join()
+        return result, time.time() - t_ref
+
     before = conn.execute("SELECT COUNT(*) FROM FILE").fetchone()[0]
     print(f"  FILE satirlari (onceki) : {before:,}", flush=True)
 
-    distinct = conn.execute(
-        "SELECT COUNT(*) FROM (SELECT 1 FROM FILE GROUP BY sha256, sha1, md5, crc32)"
-    ).fetchone()[0]
+    print(f"  Benzersiz hash sayisi hesaplaniyor...", flush=True)
+    (distinct,), t_cnt = _run_with_heartbeat(
+        "GROUP BY taraniyor...",
+        lambda: conn.execute(
+            "SELECT COUNT(*) FROM (SELECT 1 FROM FILE GROUP BY sha256, sha1, md5, crc32)"
+        ).fetchone()
+    )
+    print(f"  Tamamlandi ({format_time(t_cnt)})", flush=True)
     duplicates = before - distinct
 
     if duplicates == 0:
@@ -766,17 +790,21 @@ def dedup_file_table(db_path):
         )
     """)
 
-    print(f"  Benzersiz satirlar aktariliyor (bu asama uzun surebilir)...", flush=True)
-    conn.execute("""
-        INSERT INTO _FILE_DEDUP (sha256, sha1, md5, crc32, file_name, file_size, package_id)
-        SELECT sha256, sha1, md5, crc32,
-               MIN(file_name), MIN(file_size), MIN(package_id)
-        FROM   FILE
-        GROUP  BY sha256, sha1, md5, crc32
-    """)
-    conn.commit()
+    # --- INSERT (uzun asama) ---
+    print(f"  Benzersiz satirlar aktariliyor ({distinct:,} hedef satir)...", flush=True)
+    _, t_insert = _run_with_heartbeat(
+        "INSERT INTO _FILE_DEDUP ... GROUP BY calisiyor.",
+        lambda: conn.execute("""
+            INSERT INTO _FILE_DEDUP (sha256, sha1, md5, crc32, file_name, file_size, package_id)
+            SELECT sha256, sha1, md5, crc32,
+                   MIN(file_name), MIN(file_size), MIN(package_id)
+            FROM   FILE
+            GROUP  BY sha256, sha1, md5, crc32
+        """) or conn.commit()
+    )
+    print(f"  INSERT tamamlandi ({format_time(t_insert)})", flush=True)
 
-    print(f"  Tablo degistirme...", flush=True)
+    print(f"  Tablo degistirme (DROP → RENAME → VIEW)...", flush=True)
     conn.execute("DROP VIEW IF EXISTS DISTINCT_HASH")
     conn.execute("DROP TABLE FILE")
     conn.execute("ALTER TABLE _FILE_DEDUP RENAME TO FILE")
@@ -787,14 +815,19 @@ def dedup_file_table(db_path):
     elapsed_min = (time.time() - t0) / 60
     print(f"  [OK] {before:,} → {after:,} satir  ({before-after:,} duplicate silindi, {elapsed_min:.1f} dk)", flush=True)
 
+    # --- VACUUM (uzun asama) ---
     print(f"  VACUUM: disk alani geri kazaniliyor...", flush=True)
     conn.execute("PRAGMA journal_mode = DELETE")
-    conn.execute("VACUUM")
+    _, t_vac = _run_with_heartbeat(
+        "VACUUM calisiyor.",
+        lambda: conn.execute("VACUUM")
+    )
     conn.close()
+    print(f"  VACUUM tamamlandi ({format_time(t_vac)})", flush=True)
 
     sz_gb = os.path.getsize(db_path) / (1024 ** 3)
     print(f"  Son DB boyutu: {sz_gb:.2f} GB", flush=True)
-    print(f"[DEDUP] Tamamlandi.", flush=True)
+    print(f"[DEDUP] Tamamlandi ({format_time(time.time()-t0)})", flush=True)
     return before, after
 
 
