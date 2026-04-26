@@ -42,6 +42,27 @@ setup.bat
 
 Downloads Python 3.12 embeddable into `python_embed\` and installs pip. Requires internet.
 
+### Download NSRL Databases
+
+1. Go to the [NIST NSRL download page](https://www.nist.gov/itl/ssd/software-quality-group/national-software-reference-library-nsrl/nsrl-download/current-rds)
+2. Download the **Minimal** editions of the datasets you need (Modern, Legacy, Android, iOS)
+3. For each dataset, also download its **delta** file if you want the latest hashes
+4. Extract each zip into a subfolder under `NSRL\` — the folder name does not matter, the tool auto-discovers any `.db` file inside:
+
+```
+NSRL\
+├── RDS_2026.03.1_modern_minimal\
+│   └── RDS_2026.03.1_modern_minimal.db       (181 GB)
+├── RDS_2026.03.1_modern_minimal_delta\
+│   └── RDS_2026.03.1_modern_minimal_delta.sql
+├── RDS_2026.03.1_legacy_minimal\
+│   └── RDS_2026.03.1_legacy_minimal.db        (67 GB)
+└── RDS_2026.03.1_legacy_minimal_delta\
+    └── RDS_2026.03.1_legacy_minimal_delta.sql
+```
+
+> The `NSRL\` folder is created automatically when you first run `run_gui.bat`. You only need to place the downloaded files inside it.
+
 ### Running
 
 ```bat
@@ -160,6 +181,27 @@ setup.bat
 ```
 
 Python 3.12 embeddable'ı `python_embed\` klasörüne indirir ve pip kurar. İnternet gerektirir.
+
+### NSRL Veritabanlarını İndirme
+
+1. [NIST NSRL indirme sayfasına](https://www.nist.gov/itl/ssd/software-quality-group/national-software-reference-library-nsrl/nsrl-download/current-rds) gidin
+2. İhtiyacınız olan dataset'lerin **Minimal** sürümlerini indirin (Modern, Legacy, Android, iOS)
+3. En güncel hash'ler için her dataset'in **delta** dosyasını da indirin
+4. Her zip'i `NSRL\` altında bir alt klasöre çıkartın — klasör adı önemli değil, araç içindeki `.db` dosyasını otomatik bulur:
+
+```
+NSRL\
+├── RDS_2026.03.1_modern_minimal\
+│   └── RDS_2026.03.1_modern_minimal.db       (181 GB)
+├── RDS_2026.03.1_modern_minimal_delta\
+│   └── RDS_2026.03.1_modern_minimal_delta.sql
+├── RDS_2026.03.1_legacy_minimal\
+│   └── RDS_2026.03.1_legacy_minimal.db        (67 GB)
+└── RDS_2026.03.1_legacy_minimal_delta\
+    └── RDS_2026.03.1_legacy_minimal_delta.sql
+```
+
+> `NSRL\` klasörü `run_gui.bat` ilk çalıştırıldığında otomatik oluşturulur. Yalnızca indirdiğiniz dosyaları bu klasörün içine koymanız yeterlidir.
 
 ### Çalıştırma
 
